@@ -179,7 +179,7 @@ def main():
   if sys.argv[1] == '-o':
     du.findNewDir()
     du.getNewDir()
-    du.cleanFiles()
+    du.moveOrphanedFiles()
 
   if sys.argv[1] in ['-s', '--shareto']:
     if sys.argv[2]:
