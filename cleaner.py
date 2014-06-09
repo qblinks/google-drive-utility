@@ -6,7 +6,7 @@ from apiclient.discovery import build
 from oauth2client.client import OAuth2WebServerFlow, OAuth2Credentials
 
 
-class DriveCleaner():
+class DriveUtility():
 
   def __init__(self, drive_service):
     self.drive = drive_service
@@ -21,8 +21,8 @@ class DriveCleaner():
   def __str__(self):
     return str(self.total) + ' processed so far, ' + str(len(self.orphaned)) + ' orphaned, ' + str(self.errors) + ' errors'
 
-
-  def cleanFiles(self):
+  # List and prompt if want to move orphaned files to a new directory
+  def moveOrphanedFiles(self):
 
     keep_going = True
     next_token = None
@@ -49,11 +49,47 @@ class DriveCleaner():
         for orphaned_file in self.orphaned:
           self.drive.files().update(fileId = orphaned_file['id'], body = {'parents': [ {'id': self.new_dir['id']} ]}).execute()
 
+  # find directories which is not in domain
+  def findNotInDomain(self, domain):
+
+    keep_going = True
+    next_token = None
+    users = []
+
+    while keep_going:
+
+      self.requests += 1
+      print ('Making request ' + str(self.requests))
+
+      #f = self.drive.files().list(maxResults = 1000, pageToken = next_token).execute()
+      f = self.drive.files().list(maxResults = 1000, pageToken = next_token, q = "mimeType = 'application/vnd.google-apps.folder'").execute()
+      try:
+        next_token = f['nextPageToken']
+      except KeyError:
+        next_token = None
+        keep_going = False
+
+      self.total += len(f['items'])
+      for item in f['items']:
+        permission = self.drive.permissions().list(fileId = item['id']).execute()['items']
+        for p in permission:
+          user = {'id': p['id'], 'name': None}
+          if 'name' in p:
+            user['name'] = p['name']
+          if 'domain' in p and p['domain'] != domain and user not in users:
+            users.append(user)
+          if 'domain' not in p and user not in users:
+            users.append(user)
+
+      pprint.pprint(users)
+      print(str(len(users)) + " users.")
 
   def processItems(self, responseItemDict):
 
     for item in responseItemDict:
+      
 
+        
       # find items with no parents
       if len(item['parents']) == 0:
 
@@ -73,6 +109,15 @@ class DriveCleaner():
               print ('\t\t>>> ERROR TRASHING THIS FILE <<<')
               self.errors += 1
 
+  def searchShareTo(self, email):
+    f = self.drive.files().list(q = "'" + email + "' in writers or '" + email + "' in readers").execute()
+    print(str(len(f['items'])) + " files share to " + email + ":")
+    for item in f['items']:
+      title = "\t" + item['title']
+      if(item['mimeType'] == 'application/vnd.google-apps.folder'):
+        title = '[DIR]' + title
+      print(title)
+
   def findNewDir(self):
     f = self.drive.files().list(q = "title = '" + self.NEW_DIR_NAME + "'").execute()
     if len(f['items']) > 0:
@@ -86,9 +131,30 @@ class DriveCleaner():
 
 def main():
 
+  # get argv
+  if len(sys.argv) == 1:
+    print('Usage: ' + sys.argv[0] + ' [options...]')
+    print('Options:')
+    print(' -o, --orphane \t\tList orphaned files and prompt if want to move them to a new directory.')
+    print(' -s, --shareto EMAIL \tList files which are shared to an Email address.')
+    print(' -d, --domain DOMAIN \tList users which are not in domain.')
+    return
+  else:
+    if sys.argv[1] not in ['-o', '--orphane', '-s', '--shareto', '-d', '--domain']:
+      print('Error: no such option.')
+      return
+    else:
+      if sys.argv[1] in ['-s', '--shareto'] and len(sys.argv) == 2:
+        print('Error: Missing EMAIL parameter.')
+        return
+      else:
+        if sys.argv[1] in ['-d', '--domain'] and len(sys.argv) == 2:
+          print('Error: Missing DOMAIN parameter.')
+          return
+
   # Copy your credentials from the APIs Console
-  CLIENT_ID = '183836539565-8qsra0qme8o5okdmlm1ukb4vlg2fscai.apps.googleusercontent.com'
-  CLIENT_SECRET = 'p83uoyTtiR0XmO_I6oCqrliY'
+  CLIENT_ID = 'YOUR_CLIENT_ID'
+  CLIENT_SECRET = 'YOUR_CLIENT_SECRET'
 
   # Check https://developers.google.com/drive/scopes for all available scopes
   OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive'
@@ -108,12 +174,24 @@ def main():
   http = credentials.authorize(http)
   drive_service = build('drive', 'v2', http=http)
 
-  # Create drivecleaner and run it
-  dc = DriveCleaner(drive_service)
-  dc.findNewDir()
-  dc.getNewDir()
-  dc.cleanFiles()
+  # Create driveutility and run it
+  du = DriveUtility(drive_service)
+  if sys.argv[1] == '-o':
+    du.findNewDir()
+    du.getNewDir()
+    du.cleanFiles()
 
+  if sys.argv[1] in ['-s', '--shareto']:
+    if sys.argv[2]:
+      du.searchShareTo(email = sys.argv[2])
+    else:
+      print('Error: Missing EMAIL parameter.')
+
+  if sys.argv[1] in ['-d', '--domain']:
+    if sys.argv[2]:
+      du.findNotInDomain(domain = sys.argv[2])
+    else:
+      print('Error: Missing DOMAIN parameter.')
 
 # intialize global utiltiy classes and call main
 pp = pprint.PrettyPrinter()
