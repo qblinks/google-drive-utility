@@ -82,7 +82,7 @@ class DriveUtility():
             if 'domain' not in p and user not in users:
               users.append(user)
         except:
-          print "Error processing file '" + item['title'] + "', will pass it."
+          print "Error processing file '" + item['title'] + "', id: " + item['id'] + ", will pass it."
 
       pprint.pprint(users)
       print(str(len(users)) + " users.")
