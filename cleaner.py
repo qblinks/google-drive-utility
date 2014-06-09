@@ -71,15 +71,18 @@ class DriveUtility():
 
       self.total += len(f['items'])
       for item in f['items']:
-        permission = self.drive.permissions().list(fileId = item['id']).execute()['items']
-        for p in permission:
-          user = {'id': p['id'], 'name': None}
-          if 'name' in p:
-            user['name'] = p['name']
-          if 'domain' in p and p['domain'] != domain and user not in users:
-            users.append(user)
-          if 'domain' not in p and user not in users:
-            users.append(user)
+        try:
+          permission = self.drive.permissions().list(fileId = item['id']).execute()['items']
+          for p in permission:
+            user = {'id': p['id'], 'name': None}
+            if 'name' in p:
+              user['name'] = p['name']
+            if 'domain' in p and p['domain'] != domain and user not in users:
+              users.append(user)
+            if 'domain' not in p and user not in users:
+              users.append(user)
+        except:
+          print "Error processing file '" + item['title'] + "', will pass it."
 
       pprint.pprint(users)
       print(str(len(users)) + " users.")
@@ -102,21 +105,40 @@ class DriveUtility():
             pass
 
           else:
-            print (item['title'])
+            print (item['title'] + ', id: ' + item['id'])
             try:
               self.orphaned.append({'id': item['id'], 'title': item['title']})
             except:
               print ('\t\t>>> ERROR TRASHING THIS FILE <<<')
               self.errors += 1
 
+  # List folers/files which are share to an specified Email address.
   def searchShareTo(self, email):
-    f = self.drive.files().list(q = "'" + email + "' in writers or '" + email + "' in readers").execute()
-    print(str(len(f['items'])) + " files share to " + email + ":")
-    for item in f['items']:
-      title = "\t" + item['title']
-      if(item['mimeType'] == 'application/vnd.google-apps.folder'):
-        title = '[DIR]' + title
-      print(title)
+
+    keep_going = True
+    next_token = None
+
+    while keep_going:
+
+      self.requests += 1
+      print ('Making request ' + str(self.requests))
+
+      f = self.drive.files().list(maxResults = 1000, pageToken = next_token, q = "'" + email + "' in writers or '" + email + "' in readers").execute()
+      try:
+        next_token = f['nextPageToken']
+      except KeyError:
+        next_token = None
+        keep_going = False
+
+      self.total += len(f['items'])
+      self.processItems(f['items'])
+
+      for item in f['items']:
+        title = "\t" + item['title']
+        if(item['mimeType'] == 'application/vnd.google-apps.folder'):
+          title = '[DIR]' + title
+        title = title + ', id: ' + item['id']
+        print(title)
 
   def findNewDir(self):
     f = self.drive.files().list(q = "title = '" + self.NEW_DIR_NAME + "'").execute()
