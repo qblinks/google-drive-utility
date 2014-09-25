@@ -13,7 +13,7 @@ source bin/activate
 
 3. Usage:
 
-Search orphane files:
+Search orphaned files:
 python cleaner.py -o
 
 Search shared to users who are not from non-internal domain:
