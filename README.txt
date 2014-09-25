@@ -13,7 +13,10 @@ source bin/activate
 
 3. Usage:
 
-Search zombie files on qblinks.com GDrive:
+Search orphane files:
+python cleaner.py -o
+
+Search shared to users who are not from non-internal domain:
 python cleaner.py -d qblinks.com
 
 Search files shared to xxxx@gmail.com:
